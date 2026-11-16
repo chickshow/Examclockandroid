@@ -1,4 +1,4 @@
-no
+
 name: Build Exam Clock APK
 
 on:
@@ -193,18 +193,20 @@ jobs:
                           clock.invalidate();
                       }, h, m, true).show();
                   });
+
                   Button startNow = new Button(this);
-                   startNow.setText("Start Now");
-          box.addView(startNow);
-          startNow.setOnClickListener(v -> {
-              Calendar current = Calendar.getInstance();
-              String value = String.format(Locale.UK, "%02d:%02d",
-                  current.get(Calendar.HOUR_OF_DAY),
-                  current.get(Calendar.MINUTE));
-              prefs.edit().putString("start", value).apply();
-              start.setText("Start time: " + value);
-              clock.invalidate();
-          });
+                  startNow.setText("Start Now");
+                  box.addView(startNow);
+                  startNow.setOnClickListener(v -> {
+                      Calendar current = Calendar.getInstance();
+                      String value = String.format(Locale.UK, "%02d:%02d",
+                          current.get(Calendar.HOUR_OF_DAY),
+                          current.get(Calendar.MINUTE));
+                      prefs.edit().putString("start", value).apply();
+                      start.setText("Start time: " + value);
+                      clock.invalidate();
+                  });
+
                   CheckBox roman = check(box, "Roman numerals",
                       "roman", false);
                   CheckBox hide = check(box, "Hide exam information",
@@ -237,8 +239,8 @@ jobs:
                               .putString("module", module.getText().toString())
                               .putString("duration", duration.getText().toString())
                               .putString("extra", extra.getText().toString())
+                              .putBoolean("roman", roman.isChecked())
                               .putBoolean("hide", hide.isChecked())
-                              .putBoolean("smooth", smooth.isChecked())⁹
                               .putInt("theme", themes.getSelectedItemPosition())
                               .apply();
                           clock.invalidate();
@@ -364,64 +366,65 @@ jobs:
                           cy - (float)Math.cos(a)*length, paint);
                   }
 
-                  
-    void drawExamInfo(Calendar now, float height) {
-    String start = get("start", "09:00");
-    int duration = minutes(get("duration", "02:00"));
-    int extra = minutes(get("extra", "00:00"));
+                  void drawExamInfo(Calendar now, float height) {
+                      String start = get("start", "09:00");
+                      int duration = minutes(get("duration", "02:00"));
+                      int extra = minutes(get("extra", "00:00"));
 
-    text(get("module", "EXAM"), cx, height*.72f,
-        25, fg, true);
+                      text(get("module", "EXAM"), cx, height*.72f,
+                          25, fg, true);
 
-    text("Start: " + start + "    Duration: " +
-        get("duration", "02:00"), cx, height*.77f,
-        17, fg, false);
+                      text("Start: " + start + "    Duration: " +
+                          get("duration", "02:00"), cx, height*.77f,
+                          17, fg, false);
 
-    if (duration < 0 || extra < 0) return;
+                      if (duration < 0 || extra < 0) return;
 
-    try {
-        String[] t = start.split(":");
-        Calendar begin = (Calendar)now.clone();
-        begin.set(Calendar.HOUR_OF_DAY, Integer.parseInt(t[0]));
-        begin.set(Calendar.MINUTE, Integer.parseInt(t[1]));
-        begin.set(Calendar.SECOND, 0);
-        begin.set(Calendar.MILLISECOND, 0);
+                      try {
+                          String[] t = start.split(":");
+                          Calendar begin = (Calendar)now.clone();
+                          begin.set(Calendar.HOUR_OF_DAY,
+                              Integer.parseInt(t[0]));
+                          begin.set(Calendar.MINUTE,
+                              Integer.parseInt(t[1]));
+                          begin.set(Calendar.SECOND, 0);
+                          begin.set(Calendar.MILLISECOND, 0);
 
-        Calendar normal = (Calendar)begin.clone();
-        normal.add(Calendar.MINUTE, duration);
+                          Calendar normal = (Calendar)begin.clone();
+                          normal.add(Calendar.MINUTE, duration);
 
-        Calendar extended = (Calendar)normal.clone();
-        extended.add(Calendar.MINUTE, extra);
+                          Calendar extended = (Calendar)normal.clone();
+                          extended.add(Calendar.MINUTE, extra);
 
-        SimpleDateFormat f = new SimpleDateFormat(
-            "HH:mm", Locale.UK);
+                          SimpleDateFormat f = new SimpleDateFormat(
+                              "HH:mm", Locale.UK);
 
-        long current = now.getTimeInMillis();
-        long normalTime = normal.getTimeInMillis();
-        long extraTime = extended.getTimeInMillis();
+                          long current = now.getTimeInMillis();
+                          long normalTime = normal.getTimeInMillis();
+                          long extraTime = extended.getTimeInMillis();
 
-        boolean flashNormal = current >= normalTime &&
-            current < normalTime + 60000;
+                          boolean flashNormal = current >= normalTime &&
+                              current < normalTime + 60000;
 
-        boolean flashExtra = current >= extraTime &&
-            current < extraTime + 60000;
+                          boolean flashExtra = current >= extraTime &&
+                              current < extraTime + 60000;
 
-        int normalColour = flashNormal ?
-            (now.get(Calendar.SECOND) % 2 == 0 ? accent : bg) : fg;
+                          int normalColour = flashNormal ?
+                              (now.get(Calendar.SECOND) % 2 == 0 ? accent : bg) : fg;
 
-        int extraColour = flashExtra ?
-            (now.get(Calendar.SECOND) % 2 == 0 ? accent : bg) : fg;
+                          int extraColour = flashExtra ?
+                              (now.get(Calendar.SECOND) % 2 == 0 ? accent : bg) : fg;
 
-        text("Normal finish: " + f.format(normal.getTime()),
-            cx, height*.82f, 17, normalColour, true);
+                          text("Normal finish: " + f.format(normal.getTime()),
+                              cx, height*.82f, 17, normalColour, true);
 
-        text("Extra-time finish: " +
-            f.format(extended.getTime()),
-            cx, height*.86f, 17, extraColour, true);
+                          text("Extra-time finish: " +
+                              f.format(extended.getTime()),
+                              cx, height*.86f, 17, extraColour, true);
 
-    } catch (Exception ignored) {}
-}
-
+                      } catch (Exception ignored) {}
+                  }
+              }
           }
           EOF
 
@@ -433,3 +436,4 @@ jobs:
         with:
           name: ExamClock-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          
