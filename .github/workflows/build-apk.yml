@@ -1,4 +1,4 @@
-
+no
 name: Build Exam Clock APK
 
 on:
@@ -365,7 +365,7 @@ jobs:
                   }
 
                   
-void drawExamInfo(Calendar now, float height) {
+    void drawExamInfo(Calendar now, float height) {
     String start = get("start", "09:00");
     int duration = minutes(get("duration", "02:00"));
     int extra = minutes(get("extra", "00:00"));
