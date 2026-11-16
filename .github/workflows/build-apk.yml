@@ -194,17 +194,17 @@ jobs:
                       }, h, m, true).show();
                   });
                   Button startNow = new Button(this);
-         startNow.setText("Start Now");
-         box.addView(startNow);
-         startNow.setOnClickListener(v -> {
-             Calendar current = Calendar.getInstance();
-             String value = String.format(Locale.UK, "%02d:%02d",
-                 current.get(Calendar.HOUR_OF_DAY),
-                 current.get(Calendar.MINUTE));
-             prefs.edit().putString("start", value).apply();
-             start.setText("Start time: " + value);
-             clock.invalidate();
-         });
+                   startNow.setText("Start Now");
+          box.addView(startNow);
+          startNow.setOnClickListener(v -> {
+              Calendar current = Calendar.getInstance();
+              String value = String.format(Locale.UK, "%02d:%02d",
+                  current.get(Calendar.HOUR_OF_DAY),
+                  current.get(Calendar.MINUTE));
+              prefs.edit().putString("start", value).apply();
+              start.setText("Start time: " + value);
+              clock.invalidate();
+          });
                   CheckBox roman = check(box, "Roman numerals",
                       "roman", false);
                   CheckBox hide = check(box, "Hide exam information",
