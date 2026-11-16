@@ -209,8 +209,6 @@ jobs:
                       "roman", false);
                   CheckBox hide = check(box, "Hide exam information",
                       "hide", false);
-                  CheckBox smooth = check(box, "Move hands more smoothly",
-                      "smooth", true);
 
                   TextView label = new TextView(this);
                   label.setText("Clock theme");
@@ -239,9 +237,8 @@ jobs:
                               .putString("module", module.getText().toString())
                               .putString("duration", duration.getText().toString())
                               .putString("extra", extra.getText().toString())
-                              .putBoolean("roman", roman.isChecked())
                               .putBoolean("hide", hide.isChecked())
-                              .putBoolean("smooth", smooth.isChecked())
+                              .putBoolean("smooth", smooth.isChecked())⁹
                               .putInt("theme", themes.getSelectedItemPosition())
                               .apply();
                           clock.invalidate();
@@ -345,8 +342,6 @@ jobs:
 
                       Calendar now = Calendar.getInstance();
                       float seconds = now.get(Calendar.SECOND);
-                      if (prefs.getBoolean("smooth", true))
-                          seconds += now.get(Calendar.MILLISECOND) / 1000f;
                       float minute = now.get(Calendar.MINUTE) + seconds / 60f;
                       float hour = now.get(Calendar.HOUR) + minute / 60f;
                       hand(hour / 12f, radius*.48f, 7, fg);
@@ -369,52 +364,64 @@ jobs:
                           cy - (float)Math.cos(a)*length, paint);
                   }
 
-                  void drawExamInfo(Calendar now, float height) {
-                      String start = get("start", "09:00");
-                      int duration = minutes(get("duration", "02:00"));
-                      int extra = minutes(get("extra", "00:00"));
-                      text(get("module", "EXAM"), cx, height*.72f,
-                          25, fg, true);
-                      text("Start: " + start + "    Duration: " +
-                          get("duration", "02:00"), cx, height*.77f,
-                          17, fg, false);
+                  
+void drawExamInfo(Calendar now, float height) {
+    String start = get("start", "09:00");
+    int duration = minutes(get("duration", "02:00"));
+    int extra = minutes(get("extra", "00:00"));
 
-                      if (duration < 0 || extra < 0) return;
-                      try {
-                          String[] t = start.split(":");
-                          Calendar begin = (Calendar)now.clone();
-                          begin.set(Calendar.HOUR_OF_DAY,
-                              Integer.parseInt(t[0]));
-                          begin.set(Calendar.MINUTE, Integer.parseInt(t[1]));
-                          begin.set(Calendar.SECOND, 0);
-                          begin.set(Calendar.MILLISECOND, 0);
-                          Calendar normal = (Calendar)begin.clone();
-                          normal.add(Calendar.MINUTE, duration);
-                          Calendar extended = (Calendar)normal.clone();
-                          extended.add(Calendar.MINUTE, extra);
+    text(get("module", "EXAM"), cx, height*.72f,
+        25, fg, true);
 
-                          SimpleDateFormat f = new SimpleDateFormat(
-                              "HH:mm", Locale.UK);
-                          text("Normal finish: " + f.format(normal.getTime()),
-                              cx, height*.82f, 17, fg, false);
-                          text("Extra-time finish: " +
-                              f.format(extended.getTime()),
-                              cx, height*.86f, 17, fg, false);
+    text("Start: " + start + "    Duration: " +
+        get("duration", "02:00"), cx, height*.77f,
+        17, fg, false);
 
-                          long target = now.before(begin)
-                              ? begin.getTimeInMillis()
-                              : extended.getTimeInMillis();
-                          long diff = Math.max(0, target-now.getTimeInMillis());
-                          long total = diff/1000;
-                          String remaining = String.format(Locale.UK,
-                              "%02d:%02d:%02d", total/3600,
-                              (total/60)%60, total%60);
-                          text(now.before(begin) ? "Starts in " + remaining
-                              : "Time remaining " + remaining,
-                              cx, height*.93f, 21, accent, true);
-                      } catch (Exception ignored) {}
-                  }
-              }
+    if (duration < 0 || extra < 0) return;
+
+    try {
+        String[] t = start.split(":");
+        Calendar begin = (Calendar)now.clone();
+        begin.set(Calendar.HOUR_OF_DAY, Integer.parseInt(t[0]));
+        begin.set(Calendar.MINUTE, Integer.parseInt(t[1]));
+        begin.set(Calendar.SECOND, 0);
+        begin.set(Calendar.MILLISECOND, 0);
+
+        Calendar normal = (Calendar)begin.clone();
+        normal.add(Calendar.MINUTE, duration);
+
+        Calendar extended = (Calendar)normal.clone();
+        extended.add(Calendar.MINUTE, extra);
+
+        SimpleDateFormat f = new SimpleDateFormat(
+            "HH:mm", Locale.UK);
+
+        long current = now.getTimeInMillis();
+        long normalTime = normal.getTimeInMillis();
+        long extraTime = extended.getTimeInMillis();
+
+        boolean flashNormal = current >= normalTime &&
+            current < normalTime + 60000;
+
+        boolean flashExtra = current >= extraTime &&
+            current < extraTime + 60000;
+
+        int normalColour = flashNormal ?
+            (now.get(Calendar.SECOND) % 2 == 0 ? accent : bg) : fg;
+
+        int extraColour = flashExtra ?
+            (now.get(Calendar.SECOND) % 2 == 0 ? accent : bg) : fg;
+
+        text("Normal finish: " + f.format(normal.getTime()),
+            cx, height*.82f, 17, normalColour, true);
+
+        text("Extra-time finish: " +
+            f.format(extended.getTime()),
+            cx, height*.86f, 17, extraColour, true);
+
+    } catch (Exception ignored) {}
+}
+
           }
           EOF
 
