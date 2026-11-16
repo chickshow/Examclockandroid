@@ -10,29 +10,404 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Get source code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Create Android project
+        run: |
+          mkdir -p app/src/main/java/eu/examclock/offline
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "ExamClock"
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'eu.examclock.offline'
+              compileSdk 35
+              defaultConfig {
+                  applicationId 'eu.examclock.offline'
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:label="Exam Clock"
+                  android:allowBackup="false">
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/eu/examclock/offline/MainActivity.java <<'EOF'
+          package eu.examclock.offline;
+
+          import android.app.*;
+          import android.os.*;
+          import android.graphics.*;
+          import android.view.*;
+          import android.widget.*;
+          import android.content.*;
+          import java.text.*;
+          import java.util.*;
+
+          public class MainActivity extends Activity {
+              android.content.SharedPreferences prefs;
+              ClockView clock;
+              Handler handler = new Handler();
+
+              @Override public void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  getWindow().getDecorView().setSystemUiVisibility(
+                      5894 | 1024 | 512 | 4096);
+                  prefs = getSharedPreferences("examclock", 0);
+
+                  FrameLayout root = new FrameLayout(this);
+                  clock = new ClockView(this);
+                  root.addView(clock);
+
+                  TextView settings = new TextView(this);
+                  settings.setText("⚙");
+                  settings.setTextSize(28);
+                  settings.setTextColor(Color.WHITE);
+                  settings.setGravity(Gravity.CENTER);
+                  settings.setBackgroundColor(0x55333333);
+                  FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
+                      64, 64, Gravity.TOP | Gravity.END);
+                  p.setMargins(0, 20, 15, 0);
+                  root.addView(settings, p);
+                  settings.setOnClickListener(v -> showSettings());
+                  setContentView(root);
+
+                  handler.postDelayed(new Runnable() {
+                      public void run() {
+                          clock.invalidate();
+                          handler.postDelayed(this, 1000);
+                      }
+                  }, 1000);
+              }
+
+              String get(String key, String def) {
+                  return prefs.getString(key, def);
+              }
+
+              int minutes(String value) {
+                  try {
+                      String[] a = value.trim().split(":");
+                      if (a.length != 2) return -1;
+                      int h = Integer.parseInt(a[0]);
+                      int m = Integer.parseInt(a[1]);
+                      if (h < 0 || m < 0 || m > 59) return -1;
+                      return h * 60 + m;
+                  } catch (Exception e) { return -1; }
+              }
+
+              void showSettings() {
+                  LinearLayout box = new LinearLayout(this);
+                  box.setPadding(28, 12, 28, 8);
+                  box.setOrientation(LinearLayout.VERTICAL);
+                  ScrollView scroll = new ScrollView(this);
+                  scroll.addView(box);
+
+                  EditText module = field(box, "Module / exam code",
+                      get("module", ""));
+                  EditText duration = field(box, "Exam duration (HH:MM)",
+                      get("duration", "02:00"));
+                  EditText extra = field(box, "Extra time (HH:MM)",
+                      get("extra", "00:00"));
+
+                  Button start = new Button(this);
+                  start.setText("Start time: " + get("start", "09:00"));
+                  box.addView(start);
+                  start.setOnClickListener(v -> {
+                      String old = get("start", "09:00");
+                      int h = 9, m = 0;
+                      try {
+                          String[] a = old.split(":");
+                          h = Integer.parseInt(a[0]);
+                          m = Integer.parseInt(a[1]);
+                      } catch (Exception ignored) {}
+                      new TimePickerDialog(this, (view, hour, minute) -> {
+                          prefs.edit().putString("start",
+                              String.format(Locale.UK, "%02d:%02d",
+                                  hour, minute)).apply();
+                          start.setText("Start time: " + get("start", "09:00"));
+                          clock.invalidate();
+                      }, h, m, true).show();
+                  });
+
+                  CheckBox roman = check(box, "Roman numerals",
+                      "roman", false);
+                  CheckBox hide = check(box, "Hide exam information",
+                      "hide", false);
+                  CheckBox smooth = check(box, "Move hands more smoothly",
+                      "smooth", true);
+
+                  TextView label = new TextView(this);
+                  label.setText("Clock theme");
+                  label.setPadding(0, 12, 0, 4);
+                  box.addView(label);
+                  Spinner themes = new Spinner(this);
+                  String[] names = {"Classic", "Dark", "Blue", "Green"};
+                  themes.setAdapter(new ArrayAdapter<>(this,
+                      android.R.layout.simple_spinner_dropdown_item, names));
+                  themes.setSelection(prefs.getInt("theme", 0));
+                  box.addView(themes);
+
+                  new AlertDialog.Builder(this)
+                      .setTitle("Exam Clock settings")
+                      .setView(scroll)
+                      .setNegativeButton("Cancel", null)
+                      .setPositiveButton("Save", (d, w) -> {
+                          if (minutes(duration.getText().toString()) < 0 ||
+                              minutes(extra.getText().toString()) < 0) {
+                              new AlertDialog.Builder(this)
+                                  .setMessage("Enter durations as HH:MM, for example 02:30.")
+                                  .setPositiveButton("OK", null).show();
+                              return;
+                          }
+                          prefs.edit()
+                              .putString("module", module.getText().toString())
+                              .putString("duration", duration.getText().toString())
+                              .putString("extra", extra.getText().toString())
+                              .putBoolean("roman", roman.isChecked())
+                              .putBoolean("hide", hide.isChecked())
+                              .putBoolean("smooth", smooth.isChecked())
+                              .putInt("theme", themes.getSelectedItemPosition())
+                              .apply();
+                          clock.invalidate();
+                      }).show();
+              }
+
+              EditText field(LinearLayout box, String hint, String value) {
+                  EditText e = new EditText(this);
+                  e.setSingleLine(true);
+                  e.setHint(hint);
+                  e.setText(value);
+                  box.addView(e);
+                  return e;
+              }
+
+              CheckBox check(LinearLayout box, String text,
+                             String key, boolean def) {
+                  CheckBox c = new CheckBox(this);
+                  c.setText(text);
+                  c.setChecked(prefs.getBoolean(key, def));
+                  box.addView(c);
+                  return c;
+              }
+
+              class ClockView extends View {
+                  Paint paint = new Paint(3);
+                  Canvas canvas;
+                  int bg, fg, accent;
+                  float cx, cy, radius;
+
+                  ClockView(Context c) { super(c); }
+
+                  void colour(int colour, float width) {
+                      paint.setColor(colour);
+                      paint.setStrokeWidth(width);
+                      paint.setStyle(Paint.Style.STROKE);
+                      paint.setStrokeCap(Paint.Cap.ROUND);
+                  }
+
+                  void text(String s, float x, float y, float size,
+                            int colour, boolean bold) {
+                      paint.setStyle(Paint.Style.FILL);
+                      paint.setColor(colour);
+                      paint.setTextSize(size);
+                      paint.setTypeface(bold ? Typeface.create(
+                          "sans-serif", Typeface.BOLD) :
+                          Typeface.create("sans-serif", Typeface.NORMAL));
+                      paint.setTextAlign(Paint.Align.CENTER);
+                      canvas.drawText(s, x, y, paint);
+                  }
+
+                  @Override protected void onDraw(Canvas c) {
+                      super.onDraw(c);
+                      canvas = c;
+                      float width = getWidth(), height = getHeight();
+                      int theme = prefs.getInt("theme", 0);
+                      int[] backgrounds = {0xfff4f0e8, 0xff101820,
+                                           0xffe8f2ff, 0xffeaf4e8};
+                      int[] foregrounds = {0xff222222, 0xffffffff,
+                                           0xff102b50, 0xff173b24};
+                      int[] accents = {0xffa33b24, 0xffffbd59,
+                                       0xff1769aa, 0xff24834a};
+                      bg = backgrounds[theme];
+                      fg = foregrounds[theme];
+                      accent = accents[theme];
+
+                      canvas.drawColor(bg);
+                      cx = width / 2;
+                      cy = height * 0.39f;
+                      radius = Math.min(width * 0.42f, height * 0.31f);
+
+                      paint.setStyle(Paint.Style.FILL);
+                      paint.setColor(fg);
+                      canvas.drawCircle(cx, cy, radius + 5, paint);
+                      paint.setColor(bg);
+                      canvas.drawCircle(cx, cy, radius, paint);
+
+                      for (int i = 0; i < 60; i++) {
+                          double a = Math.PI * i / 30;
+                          float outer = radius * 0.94f;
+                          float inner = radius * (i % 5 == 0 ? 0.84f : 0.91f);
+                          colour(fg, i % 5 == 0 ? 3 : 1);
+                          canvas.drawLine(
+                              cx + (float)Math.sin(a) * inner,
+                              cy - (float)Math.cos(a) * inner,
+                              cx + (float)Math.sin(a) * outer,
+                              cy - (float)Math.cos(a) * outer, paint);
+                      }
+
+                      String[] roman = {"XII","I","II","III","IV","V",
+                          "VI","VII","VIII","IX","X","XI"};
+                      for (int i = 0; i < 12; i++) {
+                          double a = Math.PI * i / 6;
+                          String n = prefs.getBoolean("roman", false)
+                              ? roman[i] : String.valueOf(i == 0 ? 12 : i);
+                          text(n, cx + (float)Math.sin(a)*radius*.73f,
+                              cy - (float)Math.cos(a)*radius*.73f
+                                  + radius*.045f,
+                              radius*.105f, fg, true);
+                      }
+
+                      Calendar now = Calendar.getInstance();
+                      float seconds = now.get(Calendar.SECOND);
+                      if (prefs.getBoolean("smooth", true))
+                          seconds += now.get(Calendar.MILLISECOND) / 1000f;
+                      float minute = now.get(Calendar.MINUTE) + seconds / 60f;
+                      float hour = now.get(Calendar.HOUR) + minute / 60f;
+                      hand(hour / 12f, radius*.48f, 7, fg);
+                      hand(minute / 60f, radius*.69f, 4, fg);
+                      hand(seconds / 60f, radius*.78f, 2, accent);
+                      paint.setStyle(Paint.Style.FILL);
+                      paint.setColor(accent);
+                      canvas.drawCircle(cx, cy, 8, paint);
+
+                      if (!prefs.getBoolean("hide", false))
+                          drawExamInfo(now, height);
+                  }
+
+                  void hand(float fraction, float length, float thickness,
+                            int colour) {
+                      double a = fraction * Math.PI * 2;
+                      colour(colour, thickness);
+                      canvas.drawLine(cx, cy,
+                          cx + (float)Math.sin(a)*length,
+                          cy - (float)Math.cos(a)*length, paint);
+                  }
+
+                  void drawExamInfo(Calendar now, float height) {
+                      String start = get("start", "09:00");
+                      int duration = minutes(get("duration", "02:00"));
+                      int extra = minutes(get("extra", "00:00"));
+                      text(get("module", "EXAM"), cx, height*.72f,
+                          25, fg, true);
+                      text("Start: " + start + "    Duration: " +
+                          get("duration", "02:00"), cx, height*.77f,
+                          17, fg, false);
+
+                      if (duration < 0 || extra < 0) return;
+                      try {
+                          String[] t = start.split(":");
+                          Calendar begin = (Calendar)now.clone();
+                          begin.set(Calendar.HOUR_OF_DAY,
+                              Integer.parseInt(t[0]));
+                          begin.set(Calendar.MINUTE, Integer.parseInt(t[1]));
+                          begin.set(Calendar.SECOND, 0);
+                          begin.set(Calendar.MILLISECOND, 0);
+                          Calendar normal = (Calendar)begin.clone();
+                          normal.add(Calendar.MINUTE, duration);
+                          Calendar extended = (Calendar)normal.clone();
+                          extended.add(Calendar.MINUTE, extra);
+
+                          SimpleDateFormat f = new SimpleDateFormat(
+                              "HH:mm", Locale.UK);
+                          text("Normal finish: " + f.format(normal.getTime()),
+                              cx, height*.82f, 17, fg, false);
+                          text("Extra-time finish: " +
+                              f.format(extended.getTime()),
+                              cx, height*.86f, 17, fg, false);
+
+                          long target = now.before(begin)
+                              ? begin.getTimeInMillis()
+                              : extended.getTimeInMillis();
+                          long diff = Math.max(0, target-now.getTimeInMillis());
+                          long total = diff/1000;
+                          String remaining = String.format(Locale.UK,
+                              "%02d:%02d:%02d", total/3600,
+                              (total/60)%60, total%60);
+                          text(now.before(begin) ? "Starts in " + remaining
+                              : "Time remaining " + remaining,
+                              cx, height*.93f, 21, accent, true);
+                      } catch (Exception ignored) {}
+                  }
+              }
+          }
+          EOF
 
       - name: Build APK
         run: gradle assembleDebug
 
-      - name: Save APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ExamClock-APK
